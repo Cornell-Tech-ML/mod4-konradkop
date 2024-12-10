@@ -7,6 +7,8 @@ from minitorch import Tensor
 from .strategies import assert_close
 from .tensor_strategies import tensors
 
+import sys
+
 
 @pytest.mark.task4_3
 @given(tensors(shape=(1, 1, 4, 4)))
@@ -28,11 +30,55 @@ def test_avg(t: Tensor) -> None:
     minitorch.grad_check(lambda t: minitorch.avgpool2d(t, (2, 2)), t)
 
 
+# #     # TODO: Implement for Task 4.4.
+# #     raise NotImplementedError("Need to implement for Task 4.4")
 @pytest.mark.task4_4
 @given(tensors(shape=(2, 3, 4)))
 def test_max(t: Tensor) -> None:
-    # TODO: Implement for Task 4.4.
-    raise NotImplementedError("Need to implement for Task 4.4")
+    """
+    Test case for max reduction along a given dimension using minitorch.max_reduce.
+
+    Args:
+    ----
+        t: A Tensor of shape (2, 3, 4), where we will apply the max reduction along the second dimension.
+
+    Steps:
+    ------
+    1. Apply minitorch.max_reduce on the tensor 't' along dimension 1 (channels).
+    2. Ensure the output shape is correct after the reduction.
+    3. Verify that the correct maximum values are being returned for each (i, j) index by comparing with manual computation.
+
+    Verifies:
+    --------
+        - The shape of the output tensor after max reduction is (2, 1, 4).
+        - Each value in the output tensor corresponds to the maximum value along the specified dimension.
+    """
+
+    # Perform max reduction along dimension 1
+    out = minitorch.max_reduce(t, 1)
+
+    # Assert that the shape of the result is correct (2, 1, 4)
+    assert out.shape == (
+        2,
+        1,
+        4,
+    ), f"Expected output shape (2, 1, 4), but got {out.shape}."
+
+    # Loop over each batch (i) and each width element (j)
+    for i in range(t.shape[0]):  # Batch dimension (size 2)
+        for j in range(t.shape[2]):  # Width dimension (size 4)
+            max_value = -sys.float_info.max  # Initialize with a very small value
+
+            # Loop over the channels (k) and find the maximum value
+            for k in range(t.shape[1]):  # Channels dimension (size 3)
+                current_value = t[(i, k, j)]  # Get the value at (i, k, j)
+
+                # Update max_value if the current value is larger
+                if current_value > max_value:
+                    max_value = current_value
+
+            # Assert that the computed max value matches the result from minitorch.max_reduce
+            assert_close(out[(i, 0, j)], max_value)
 
 
 @pytest.mark.task4_4

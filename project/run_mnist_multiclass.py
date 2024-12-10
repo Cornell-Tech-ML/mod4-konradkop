@@ -1,8 +1,13 @@
+import os.path
+# Set HOME environment variable for Windows
+os.environ['HOME'] = os.path.expanduser('~')
+
 from mnist import MNIST
+
 
 import minitorch
 
-mndata = MNIST("project/data/")
+mndata = MNIST("./data/")
 images, labels = mndata.load_training()
 
 BACKEND = minitorch.TensorBackend(minitorch.FastOps)
@@ -41,8 +46,18 @@ class Conv2d(minitorch.Module):
         self.bias = RParam(out_channels, 1, 1)
 
     def forward(self, input):
+        # Direct convolution with the weights and add bias efficiently
+        weight_value = self.weights.value
+        bias_value = self.bias.value
+
+        # Perform convolution followed by adding the bias
+        conv_result = minitorch.conv2d(input, weight_value)
+
+        # Adding the bias to the convolution result (broadcasting is handled automatically)
+        return conv_result + bias_value
+        return minitorch.conv2d(input, self.weights.value) + self.bias.value
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 class Network(minitorch.Module):
@@ -66,13 +81,26 @@ class Network(minitorch.Module):
         # For vis
         self.mid = None
         self.out = None
+        self.classes = C
 
+        self.conv1 = Conv2d(1, 4, 3, 3)
+        self.conv2 = Conv2d(4, 8, 3, 3)
+        self.linear1 = Linear(392, 64)
+        self.linear2 = Linear(64, self.classes)
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
     def forward(self, x):
+        self.mid = self.conv1.forward(x).relu()
+        self.out = self.conv2.forward(self.mid).relu()
+        tmp = self.linear1.forward(
+        minitorch.avgpool2d(self.out, (4, 4)).view(BATCH, 392))
+        tmp = minitorch.dropout(tmp, rate=0.25, ignore=not self.training)
+        tmp = self.linear2.forward(tmp)
+        out = minitorch.logsoftmax(tmp, dim=1)
+        return out
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 def make_mnist(start, stop):
