@@ -752,4 +752,4 @@ Best Valid accuracy: 72.00%
 Epoch 250, loss 24.64229417577822, train accuracy: 73.11%
 Validation accuracy: 70.00%
 Best Valid accuracy: 72.00%
-root@LAPTOP-6PHCSM3E:~/workspaces/mod4-konradkop/project# 
+root@LAPTOP-6PHCSM3E:~/workspaces/mod4-konradkop/project#
