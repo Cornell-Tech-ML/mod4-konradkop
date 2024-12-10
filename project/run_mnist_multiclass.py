@@ -1,8 +1,13 @@
+import os.path
+# Set HOME environment variable for Windows
+os.environ['HOME'] = os.path.expanduser('~')
+
 from mnist import MNIST
+
 
 import minitorch
 
-mndata = MNIST("project/data/")
+mndata = MNIST("./data/")
 images, labels = mndata.load_training()
 
 BACKEND = minitorch.TensorBackend(minitorch.FastOps)
@@ -41,38 +46,96 @@ class Conv2d(minitorch.Module):
         self.bias = RParam(out_channels, 1, 1)
 
     def forward(self, input):
+        # Direct convolution with the weights and add bias efficiently
+        weight_value = self.weights.value
+        bias_value = self.bias.value
+
+        # Perform convolution followed by adding the bias
+        conv_result = minitorch.conv2d(input, weight_value)
+
+        # Adding the bias to the convolution result (broadcasting is handled automatically)
+        return conv_result + bias_value
+        return minitorch.conv2d(input, self.weights.value) + self.bias.value
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 class Network(minitorch.Module):
     """
-    Implement a CNN for MNist classification based on LeNet.
+    A Convolutional Neural Network (CNN) for MNIST classification based on the LeNet architecture.
 
-    This model should implement the following procedure:
+    This model follows the below procedure:
+    1. Apply a 2D convolution with 4 output channels and a 3x3 kernel, followed by a ReLU activation. 
+       The result is stored in `self.mid`.
+    2. Apply another 2D convolution with 8 output channels and a 3x3 kernel, followed by a ReLU activation. 
+       The result is stored in `self.out`.
+    3. Perform 2D pooling (either average or max) with a 4x4 kernel to downsample the feature map.
+    4. Flatten the resulting tensor to a shape of `[batch_size x 392]`.
+    5. Pass the flattened tensor through a fully connected (linear) layer to reduce the size to 64, 
+       followed by a ReLU activation and dropout with a rate of 25%.
+    6. Apply a second linear layer to map the tensor to the number of output classes (`C`).
+    7. Apply a log-softmax operation over the class dimension to generate log probabilities for classification.
 
-    1. Apply a convolution with 4 output channels and a 3x3 kernel followed by a ReLU (save to self.mid)
-    2. Apply a convolution with 8 output channels and a 3x3 kernel followed by a ReLU (save to self.out)
-    3. Apply 2D pooling (either Avg or Max) with 4x4 kernel.
-    4. Flatten channels, height, and width. (Should be size BATCHx392)
-    5. Apply a Linear to size 64 followed by a ReLU and Dropout with rate 25%
-    6. Apply a Linear to size C (number of classes).
-    7. Apply a logsoftmax over the class dimension.
+    Attributes:
+    ----------
+        mid (:class:`Tensor`): Intermediate result after the first convolution layer.
+        out (:class:`Tensor`): Intermediate result after the second convolution layer.
+        classes (int): Number of output classes (`C`).
+        conv1 (:class:`Conv2d`): First 2D convolutional layer.
+        conv2 (:class:`Conv2d`): Second 2D convolutional layer.
+        linear1 (:class:`Linear`): First fully connected layer.
+        linear2 (:class:`Linear`): Second fully connected layer for classification.
     """
 
     def __init__(self):
         super().__init__()
 
-        # For vis
+        # Attributes for visualization
         self.mid = None
         self.out = None
+        self.classes = C  # Set the number of classes dynamically.
 
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # Define the layers of the network.
+        self.conv1 = Conv2d(1, 4, 3, 3)  # Input channels: 1, Output channels: 4, Kernel: 3x3
+        self.conv2 = Conv2d(4, 8, 3, 3)  # Input channels: 4, Output channels: 8, Kernel: 3x3
+        self.linear1 = Linear(392, 64)  # Fully connected layer: Input size 392, Output size 64
+        self.linear2 = Linear(64, self.classes)  # Fully connected layer: Input size 64, Output size C
 
     def forward(self, x):
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        """
+        Forward pass through the network.
+
+        Args:
+        ----
+            x (:class:`Tensor`): Input tensor with shape `[batch_size x 1 x height x width]`, 
+                                 where `height` and `width` are the dimensions of the MNIST images.
+
+        Returns:
+        -------
+            :class:`Tensor`: Output tensor with shape `[batch_size x C]`, where `C` is the number of classes.
+        """
+
+        # Apply the first convolutional layer, followed by ReLU activation.
+        self.mid = self.conv1.forward(x).relu()
+
+        # Apply the second convolutional layer, followed by ReLU activation.
+        self.out = self.conv2.forward(self.mid).relu()
+
+        # Downsample the feature map using average pooling with a 4x4 kernel.
+        # Flatten the resulting tensor to a shape of [batch_size x 392].
+        pooled = minitorch.avgpool2d(self.out, (4, 4)).view(BATCH, 392)
+
+        # Pass through the first linear layer with ReLU activation and apply dropout.
+        tmp = self.linear1.forward(pooled).relu()
+        tmp = minitorch.dropout(tmp, rate=0.25, ignore=not self.training)
+
+        # Pass through the second linear layer to produce class logits.
+        tmp = self.linear2.forward(tmp)
+
+        # Apply log-softmax to generate log probabilities over classes.
+        out = minitorch.logsoftmax(tmp, dim=1)
+
+        return out
 
 
 def make_mnist(start, stop):

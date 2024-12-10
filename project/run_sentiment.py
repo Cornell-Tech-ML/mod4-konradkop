@@ -1,3 +1,6 @@
+import os.path
+# Set HOME environment variable for Windows
+os.environ['HOME'] = os.path.expanduser('~')
 import random
 
 import embeddings
@@ -34,8 +37,9 @@ class Conv1d(minitorch.Module):
         self.bias = RParam(1, out_channels, 1)
 
     def forward(self, input):
+        return minitorch.conv1d(input, self.weights.value) + self.bias.value
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 class CNNSentimentKim(minitorch.Module):
@@ -61,15 +65,70 @@ class CNNSentimentKim(minitorch.Module):
     ):
         super().__init__()
         self.feature_map_size = feature_map_size
+        self.classes = 1
+        self.dropout = dropout
         # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+        self.conv1d1 = Conv1d(embedding_size, feature_map_size, filter_sizes[0])
+        self.conv1d2 = Conv1d(embedding_size, feature_map_size, filter_sizes[1])
+        self.conv1d3 = Conv1d(embedding_size, feature_map_size, filter_sizes[2])
+        self.linear = Linear(self.feature_map_size, self.classes)
+        # TODO: Implement for Task 4.5.
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
     def forward(self, embeddings):
         """
-        embeddings tensor: [batch x sentence length x embedding dim]
+        Forward pass for processing embeddings through convolutional layers, pooling, and a linear layer.
+
+        Args:
+        ----
+            embeddings (Tensor): Input tensor with shape [batch_size x sentence_length x embedding_dim],
+                                where `batch_size` is the number of examples in the batch,
+                                `sentence_length` is the number of tokens in each sentence, and
+                                `embedding_dim` is the size of the embedding vector for each token.
+
+        Returns:
+        -------
+            Tensor: Output tensor with shape [batch_size], containing the predicted values 
+                    for each example in the batch.
         """
-        # TODO: Implement for Task 4.5.
-        raise NotImplementedError("Need to implement for Task 4.5")
+
+        # Permute the tensor to have dimensions [batch_size x embedding_dim x sentence_length].
+        # This arrangement is needed for the convolutional layers to operate over the sentence length.
+        embeddings = embeddings.permute(0, 2, 1)
+
+        # Apply the first 1D convolution layer followed by a ReLU activation.
+        conv1 = self.conv1d1.forward(embeddings).relu()
+
+        # Apply the second 1D convolution layer followed by a ReLU activation.
+        conv2 = self.conv1d2.forward(embeddings).relu()
+
+        # Apply the third 1D convolution layer followed by a ReLU activation.
+        conv3 = self.conv1d3.forward(embeddings).relu()
+
+        # Perform max-over-time pooling along the sentence length dimension for each convolution output.
+        # This reduces each feature map to a single value, effectively removing the sentence length dimension.
+        max1 = minitorch.max_reduce(conv1, dim=2)
+        max2 = minitorch.max_reduce(conv2, dim=2)
+        max3 = minitorch.max_reduce(conv3, dim=2)
+
+        # Combine the pooled outputs from all three convolution layers by summing them.
+        # Reshape the resulting tensor to [batch_size x feature_map_size], where feature_map_size
+        # is determined by the architecture of the convolution layers.
+        out = (max1 + max2 + max3).view(embeddings.shape[0], self.feature_map_size)
+
+        # Apply dropout for regularization during training to prevent overfitting.
+        # `ignore=True` ensures dropout is skipped during evaluation.
+        out = minitorch.dropout(out, rate=self.dropout, ignore=True)
+
+        # Pass the output through a linear layer to produce the final predictions.
+        out = self.linear.forward(out)
+
+        # Apply a sigmoid activation function to output probabilities in the range [0, 1].
+        # Reshape the output to [batch_size], with one prediction per example.
+        return out.sigmoid().view(embeddings.shape[0])
+
+        # Note: Ensure the above function is implemented as part of Task 4.5.
+        # raise NotImplementedError("Need to implement for Task 4.5")
 
 
 # Evaluation helper methods
